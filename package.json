@@ -1,0 +1,17 @@
+{
+  "name": "history-today-bot",
+  "version": "1.0.0",
+  "description": "\"היום בהיסטוריה\" - בוט טלגרם/דיסקורד ששולח כל בוקר עובדה היסטורית עם תמונה וקישור, מבוסס על ה-API החינמי של ויקיפדיה",
+  "type": "module",
+  "main": "src/index.js",
+  "engines": {
+    "node": ">=20.12.0"
+  },
+  "scripts": {
+    "start": "node src/index.js --schedule",
+    "send": "node src/index.js --now",
+    "preview": "node src/index.js --dry-run",
+    "test": "node --test test/smoke.test.mjs"
+  },
+  "license": "MIT"
+}

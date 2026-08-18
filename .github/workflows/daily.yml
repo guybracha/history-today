@@ -1,0 +1,82 @@
+# שליחה יומית של "היום בהיסטוריה" לטלגרם ולדיסקורד.
+# שמות השלבים באנגלית בכוונה - ממשק ההרצות של GitHub וקישורי הבאדג' נוחים יותר כך.
+name: daily-history
+
+on:
+  schedule:
+    # ה-cron של GitHub הוא UTC בלבד ולא מכיר שעון קיץ, ולכן מריצים בשתי שעות:
+    - cron: '0 5 * * *' # 08:00 בישראל בשעון קיץ
+    - cron: '0 6 * * *' # 08:00 בישראל בשעון חורף
+    # הדגל --guard-time מוודא שרק ההרצה שנופלת על 08:00 המקומי באמת שולחת.
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'תצוגה מקדימה בלבד, בלי לשלוח'
+        type: boolean
+        default: false
+      only:
+        description: 'שליחה ליעד אחד בלבד'
+        type: choice
+        options: ['both', 'telegram', 'discord']
+        default: both
+
+# נדרש כדי לשמור את data/sent.json חזרה ל-repo (מניעת חזרה על עובדות)
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-history
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Send daily fact
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
+          USER_AGENT: ${{ secrets.WIKI_USER_AGENT || 'history-today-bot/1.0 (github actions)' }}
+          TZ: ${{ vars.TZ || 'Asia/Jerusalem' }}
+          WIKI_LANG: ${{ vars.WIKI_LANG || 'he' }}
+          SEND_TIME: ${{ vars.SEND_TIME || '08:00' }}
+          CATEGORY: ${{ vars.CATEGORY || 'events' }}
+        run: |
+          set -euo pipefail
+          args=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            args="--dry-run"
+          else
+            args="--now"
+            # הרצה ידנית שולחת מיד; הרצה מתוזמנת נבדקת מול השעה המקומית
+            if [ "${{ github.event_name }}" = "schedule" ]; then
+              args="$args --guard-time"
+            fi
+            case "${{ inputs.only }}" in
+              telegram|discord) args="$args --only=${{ inputs.only }}" ;;
+            esac
+          fi
+          echo "מריץ: node src/index.js $args"
+          node src/index.js $args
+
+      - name: Persist sent history
+        if: ${{ !cancelled() && inputs.dry_run != true }}
+        run: |
+          set -euo pipefail
+          if [ -z "$(git status --porcelain data/sent.json)" ]; then
+            echo "אין שינוי ב-data/sent.json"
+            exit 0
+          fi
+          git config user.name  "history-today-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add data/sent.json
+          git commit -m "chore: עדכון היסטוריית שליחות [skip ci]"
+          git push

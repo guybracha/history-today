@@ -1,0 +1,7 @@
+.env
+.env.example
+data/*
+!data/sent.json
+node_modules/
+scratch_*
+*.log

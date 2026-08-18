@@ -49,6 +49,39 @@ powershell -ExecutionPolicy Bypass -File scripts\install-windows-task.ps1 -Time 
 0 8 * * * cd /path/to/history_today && /usr/bin/node src/index.js --now >> bot.log 2>&1
 ```
 
+## הרצה על שרת: GitHub Actions
+
+הדרך המומלצת - חינמית, בלי שרת לתחזק, ורצה גם כשהמחשב שלך כבוי. הקובץ [`.github/workflows/daily.yml`](.github/workflows/daily.yml) כבר מוכן.
+
+**1. צרו repo ודחפו:**
+
+```bash
+git remote add origin https://github.com/<USER>/history-today-bot.git
+git push -u origin main
+```
+
+**2. הגדירו Secrets** ב-`Settings -> Secrets and variables -> Actions -> New repository secret`:
+
+| Secret | ערך |
+| --- | --- |
+| `TELEGRAM_BOT_TOKEN` | הטוקן מ-@BotFather |
+| `TELEGRAM_CHAT_ID` | המזהה מ-`scripts/find-chat-id.mjs` |
+| `DISCORD_WEBHOOK_URL` | כתובת ה-webhook |
+
+אופציונלי, בלשונית `Variables` (לא סודי): `TZ`, `WIKI_LANG`, `SEND_TIME`, `CATEGORY`.
+
+**3. בדקו** בלשונית `Actions` -> `daily-history` -> `Run workflow`. יש שם תיבת `dry_run` להרצה יבשה בלי לשלוח.
+
+### שעון קיץ - הבעיה והפתרון
+
+ה-cron של GitHub Actions רץ ב-**UTC בלבד** ואינו מכיר שעון קיץ. 08:00 בישראל הוא 05:00 UTC בקיץ ו-06:00 UTC בחורף. לכן ה-workflow רץ **בשתי השעות**, והדגל `--guard-time` מוודא שרק ההרצה שנופלת בתוך חלון של 55 דקות סביב `SEND_TIME` המקומי באמת שולחת - השנייה מדלגת ויוצאת בהצלחה.
+
+בנוסף, GitHub לא מבטיח דיוק בשעה: בשעות עומס ההרצה עלולה להתעכב ב-5-15 דקות. החלון של 55 דקות סופג את זה.
+
+### שמירת ההיסטוריה
+
+`data/sent.json` נשמר חזרה ל-repo בסוף כל הרצה (`permissions: contents: write`), כדי שמניעת החזרות תעבוד גם בין הרצות. זו הסיבה ש-`.gitignore` מחריג אותו במפורש.
+
 ## פקודות
 
 | פקודה | מה היא עושה |
@@ -58,7 +91,6 @@ powershell -ExecutionPolicy Bypass -File scripts\install-windows-task.ps1 -Time 
 | `node src/index.js --schedule` | מריץ ברקע ושולח כל יום בשעה שהוגדרה |
 | `node src/index.js --check` | בודק שהטוקנים והיעדים תקינים |
 | `node src/index.js --help` | עזרה |
-
 | `node scripts/find-chat-id.mjs` | מוצא את ה-`TELEGRAM_CHAT_ID` הנכון |
 
 דגלים נוספים: `--date=2026-05-14`, `--lang=en`, `--category=births|deaths|events`, `--only=telegram|discord`.
@@ -79,6 +111,7 @@ powershell -ExecutionPolicy Bypass -File scripts\install-windows-task.ps1 -Time 
 | `SEND_TIME` | `08:00` | שעת השליחה היומית (שעון מקומי) |
 | `CATEGORY` | `events` | אירועים / לידות / פטירות |
 | `NO_REPEAT_DAYS` | `365` | טווח שבו לא חוזרים על אותה עובדה |
+| `TZ` | של המערכת | אזור זמן. **חובה על שרת** - ברירת המחדל שם היא UTC |
 
 ## איך זה עובד
 
@@ -107,4 +140,5 @@ src/
 
 * ויקיפדיה דורשת `User-Agent` מזהה. מומלץ להגדיר `USER_AGENT` ב-`.env` עם כתובת מייל, בהתאם ל[מדיניות השימוש](https://foundation.wikimedia.org/wiki/Policy:Wikimedia_Foundation_User-Agent_Policy).
 * בטלגרם, אם שליחת התמונה נכשלת (קורה מדי פעם עם קבצים גדולים ב-Wikimedia) — הבוט נופל אוטומטית לשליחת טקסט עם תצוגה מקדימה של הקישור.
-* `data/sent.json` נוצר אוטומטית ואינו נכנס ל-git.
+* `data/sent.json` נוצר אוטומטית. בהרצה מקומית הוא פשוט קובץ; ב-GitHub Actions הוא נשמר ב-repo כדי שמניעת החזרות תשרוד בין הרצות.
+* ה-`.env` לעולם לא נכנס ל-git. ב-GitHub Actions הסודות מגיעים מ-Secrets והקובץ פשוט לא קיים שם.
